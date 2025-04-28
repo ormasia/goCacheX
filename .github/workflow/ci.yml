@@ -1,0 +1,38 @@
+name: Go CI  # 工作流名称，显示在GitHub Actions界面上
+
+on:  # 定义工作流触发条件
+  push:  # 当有代码推送时触发
+    branches: [ "main" ]  # 仅当推送到main分支时
+  pull_request:  # 当有Pull Request时触发
+    branches: [ "main" ]  # 仅当PR目标是main分支时
+
+jobs:  # 定义工作流中的作业
+  build-test-lint:  # 作业名称，包含构建、测试和代码检查
+    runs-on: windows-latest  # 在Windows最新版本环境中运行
+
+    steps:  # 定义作业中的步骤
+    - name: Checkout code  # 检出代码
+      uses: actions/checkout@v4  # 使用官方checkout动作v4版本
+
+    - name: Set up Go  # 设置Go环境
+      uses: actions/setup-go@v5  # 使用官方setup-go动作v5版本
+      with:
+        go-version: '1.24'  # 这里可以改成你的 Go 版本
+
+    - name: Install dependencies  # 安装项目依赖
+      run: go mod download  # 下载go.mod中定义的所有依赖包
+
+    - name: Build  # 构建项目
+      run: go build ./...  # 编译所有包，检查编译错误
+
+    - name: Run unit tests  # 运行单元测试
+      run: go test -v ./...  # 运行所有测试，-v参数提供详细输出
+
+    - name: Install staticcheck  # 安装staticcheck工具
+      run: go install honnef.co/go/tools/cmd/staticcheck@latest  # 安装最新版本的静态代码分析工具
+
+    - name: Run staticcheck  # 运行静态代码分析
+      run: staticcheck ./...  # 分析所有代码，检查潜在问题
+
+    - name: Go vet  # 运行Go vet工具
+      run: go vet ./...  # 检查代码中的常见错误和可疑构造
