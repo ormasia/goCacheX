@@ -2,9 +2,9 @@ name: Go CI  # 工作流名称，显示在GitHub Actions界面上
 
 on:  # 定义工作流触发条件
   push:  # 当有代码推送时触发
-    branches: [ "main" ]  # 仅当推送到main分支时
+    branches: [ "master" ]  # 仅当推送到main分支时
   pull_request:  # 当有Pull Request时触发
-    branches: [ "main" ]  # 仅当PR目标是main分支时
+    branches: [ "master" ]  # 仅当PR目标是main分支时
 
 jobs:  # 定义工作流中的作业
   build-test-lint:  # 作业名称，包含构建、测试和代码检查
