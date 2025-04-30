@@ -29,6 +29,7 @@ func TestDo(t *testing.T) {
 		go func(index int) {
 			defer wg.Done()
 			val, _ := g.Do(key, fn)
+
 			results[index] = val.(int)
 		}(i)
 	}

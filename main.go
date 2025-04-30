@@ -23,7 +23,7 @@ var db = map[string]string{
 }
 
 func createGroup(groupname string) *gocachex.Group {
-	return gocachex.NewGroup(groupname, 2<<10, gocachex.GetterFunc( //这个空间下所有缓存使用该函数更新缓存
+	return gocachex.NewGroup(groupname, 2<<10, gocachex.GetterFunc( // 创建缓存组，当缓存未命中时使用该函数从数据源加载数据
 		func(key string) ([]byte, error) {
 			log.Println("[SlowDB] search key", key)
 			if v, ok := db[key]; ok {
