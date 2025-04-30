@@ -84,3 +84,6 @@ package main
 // 	}
 // 	startCacheServer(addrMap[port], addrs, gee)
 // }
+func main() {
+
+}
