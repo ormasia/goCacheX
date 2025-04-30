@@ -23,6 +23,7 @@ func (g *Group) Do(key string, fn func() (any, error)) (any, error) {
 		g.m = make(map[string]*call)
 	}
 	if key == "" {
+		g.mu.Unlock()
 		return nil, fmt.Errorf("key is empty")
 	}
 	if c, ok := g.m[key]; ok {
@@ -36,8 +37,13 @@ func (g *Group) Do(key string, fn func() (any, error)) (any, error) {
 	g.m[key] = c //证明已经在执行
 	g.mu.Unlock()
 
-	c.val, c.err = fn()
-	c.wg.Done()
+	// 在后台执行实际函数（非阻塞）
+	go func() {
+		defer c.wg.Done() // 确保无论是否panic都标记完成
+		c.val, c.err = fn()
+	}()
+
+	c.wg.Wait() // 等待后台函数完成
 
 	g.mu.Lock()
 	delete(g.m, key)

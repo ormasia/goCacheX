@@ -29,6 +29,7 @@ func TestDo(t *testing.T) {
 		go func(index int) {
 			defer wg.Done()
 			val, _ := g.Do(key, fn)
+
 			results[index] = val.(int)
 		}(i)
 	}
@@ -49,41 +50,66 @@ func TestDo(t *testing.T) {
 // 测试不同key的请求可以并发执行
 func TestDoDifferentKeys(t *testing.T) {
 	g := new(Group)
-	counter := 0
-	keys := []string{"key1", "key2", "key3"}
-
-	fn := func() (any, error) {
-		time.Sleep(100 * time.Millisecond)
-		counter++
-		return counter, nil
-	}
-
+	results := make(map[string]string)
+	var mu sync.Mutex // 添加互斥锁
 	var wg sync.WaitGroup
-	results := make(map[string]int)
+	wg.Add(3)
 
-	// 并发请求不同的key
-	for _, key := range keys {
-		wg.Add(1)
-		go func(k string) {
-			defer wg.Done()
-			val, _ := g.Do(k, fn)
-			results[k] = val.(int)
-		}(key)
-	}
+	go func() {
+		defer wg.Done()
+		v, err := g.Do("key1", func() (interface{}, error) {
+			return "value1", nil
+		})
+		if err != nil {
+			t.Errorf("Do error: %v", err)
+			return
+		}
+		mu.Lock() // 加锁
+		results["key1"] = v.(string)
+		mu.Unlock() // 解锁
+	}()
+
+	go func() {
+		defer wg.Done()
+		v, err := g.Do("key2", func() (interface{}, error) {
+			return "value2", nil
+		})
+		if err != nil {
+			t.Errorf("Do error: %v", err)
+			return
+		}
+		mu.Lock() // 加锁
+		results["key2"] = v.(string)
+		mu.Unlock() // 解锁
+	}()
+
+	go func() {
+		defer wg.Done()
+		v, err := g.Do("key3", func() (interface{}, error) {
+			return "value3", nil
+		})
+		if err != nil {
+			t.Errorf("Do error: %v", err)
+			return
+		}
+		mu.Lock() // 加锁
+		results["key3"] = v.(string)
+		mu.Unlock() // 解锁
+	}()
 
 	wg.Wait()
 
-	// 验证每个key的结果都不同
-	seen := make(map[int]bool)
-	for _, val := range results {
-		if seen[val] {
-			t.Errorf("不同key的结果重复: %d", val)
-		}
-		seen[val] = true
+	mu.Lock() // 加锁
+	if results["key1"] != "value1" {
+		t.Errorf("key1 got %v, want value1", results["key1"])
 	}
-	if counter != len(keys) {
-		t.Errorf("函数执行次数错误，期望%d，得到%d", len(keys), counter)
+	if results["key2"] != "value2" {
+		t.Errorf("key2 got %v, want value2", results["key2"])
 	}
+	if results["key3"] != "value3" {
+		t.Errorf("key3 got %v, want value3", results["key3"])
+	}
+	mu.Unlock() // 解锁
 }
 
 // 测试函数执行出错的情况
