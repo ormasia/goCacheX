@@ -23,8 +23,8 @@ type Group struct {
 	getter    Getter // 缓存未命中时获取源数据的回调函数
 	mainCache cache  // 并发安全的主缓存，存储实际的缓存数据
 
-	peers  PeerPicker
-	loader *singleflight.Group
+	peers  PeerPicker          // 通过一致性哈希选择节点
+	loader *singleflight.Group // 防止缓存击穿
 }
 
 // Getter 定义了当缓存未命中时获取源数据的接口
@@ -114,28 +114,6 @@ func (g *Group) load(key string) (value ByteView, err error) { //返回值变量
 	}
 	return ByteView{}, err
 }
-
-// func (g *Group) load(key string) (value ByteView, err error) {
-// 	// each key is only fetched once (either locally or remotely)
-// 	// regardless of the number of concurrent callers.
-// 	view, err := g.loader.Do(key, func() (any, error) {
-// 		if g.peers != nil {
-// 			if peer, ok := g.peers.PickPeer(key); ok {
-// 				if value, err = g.getFromPeer(peer, key); err == nil {
-// 					return value, nil
-// 				}
-// 				log.Println("[GeeCache] Failed to get from peer", err)
-// 			}
-// 		}
-
-// 		return g.getLocally(key)
-// 	})
-
-// 	if err == nil {
-// 		return view.(ByteView), nil
-// 	}
-// 	return
-// }
 
 // getLocally 从本地数据源获取原始数据，转换为ByteView并添加到缓存
 func (g *Group) getLocally(key string) (ByteView, error) {

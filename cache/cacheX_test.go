@@ -19,7 +19,7 @@ func TestGetter(t *testing.T) {
 	})
 
 	expect := []byte("key")
-	if v, _ := f.Get("key"); !reflect.DeepEqual(v, expect) {
+	if v, _ := f.Get("key"); !reflect.DeepEqual(v, expect) { //
 		t.Fatal("callback failed")
 	}
 }

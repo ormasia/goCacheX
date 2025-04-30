@@ -11,7 +11,7 @@ kkk not exist
 import (
 	"flag"
 	"fmt"
-	cache "goCacheX/cache"
+	gocachex "goCacheX/cache"
 	"log"
 	"net/http"
 )
@@ -22,8 +22,8 @@ var db = map[string]string{
 	"Sam":  "567",
 }
 
-func createGroup() *cache.Group {
-	return cache.NewGroup("scores", 2<<10, cache.GetterFunc(
+func createGroup(groupname string) *gocachex.Group {
+	return gocachex.NewGroup(groupname, 2<<10, gocachex.GetterFunc( //这个空间下所有缓存使用该函数更新缓存
 		func(key string) ([]byte, error) {
 			log.Println("[SlowDB] search key", key)
 			if v, ok := db[key]; ok {
@@ -33,15 +33,15 @@ func createGroup() *cache.Group {
 		}))
 }
 
-func startCacheServer(addr string, addrs []string, gee *cache.Group) {
-	peers := cache.NewHTTPPool(addr)
+func startCacheServer(addr string, addrs []string, gee *gocachex.Group) {
+	peers := gocachex.NewHTTPPool(addr) //可以把接口当作一个充电协议，任何一个实现了该协议的充电器，它就被认为是这个接口的实现者
 	peers.Set(addrs...)
 	gee.RegisterPeers(peers)
-	log.Println("cache is running at", addr)
+	log.Println("gocachex is running at", addr)
 	log.Fatal(http.ListenAndServe(addr[7:], peers))
 }
 
-func startAPIServer(apiAddr string, gee *cache.Group) {
+func startAPIServer(apiAddr string, gee *gocachex.Group) {
 	http.Handle("/api", http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			key := r.URL.Query().Get("key")
@@ -62,7 +62,7 @@ func startAPIServer(apiAddr string, gee *cache.Group) {
 func main() {
 	var port int
 	var api bool
-	flag.IntVar(&port, "port", 8001, "Geecache server port")
+	flag.IntVar(&port, "port", 8001, "cache server port")
 	flag.BoolVar(&api, "api", false, "Start a api server?")
 	flag.Parse()
 
@@ -78,7 +78,7 @@ func main() {
 		addrs = append(addrs, v)
 	}
 
-	gee := createGroup()
+	gee := createGroup("socres")
 	if api {
 		go startAPIServer(apiAddr, gee)
 	}
