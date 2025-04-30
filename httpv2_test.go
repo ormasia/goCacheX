@@ -42,7 +42,7 @@ func TestMultiNodeCache(t *testing.T) {
 	// 创建并启动所有节点
 	var servers []*httptest.Server
 	var addrs []string
-	var groups []*cache.Group
+	// var groups []*cache.Group
 
 	for _, node := range nodes {
 		addr := fmt.Sprintf("%s:%d", node.addr, node.port)
@@ -50,7 +50,7 @@ func TestMultiNodeCache(t *testing.T) {
 
 		// 为每个节点创建独立的缓存组
 		gee := createGroup()
-		groups = append(groups, gee)
+		// groups = append(groups, gee)
 
 		peers := cache.NewHTTPPool(addr)
 		peers.Set(addrs...)
@@ -117,7 +117,7 @@ func TestNodeFailure(t *testing.T) {
 
 	var servers []*httptest.Server
 	var addrs []string
-	var groups []*cache.Group
+	// var groups []*cache.Group
 
 	// 只启动第一个节点
 	for i, node := range nodes {
@@ -125,7 +125,7 @@ func TestNodeFailure(t *testing.T) {
 		addrs = append(addrs, addr)
 
 		gee := createGroup()
-		groups = append(groups, gee)
+		// groups = append(groups, gee)
 
 		peers := cache.NewHTTPPool(addr)
 		peers.Set(addrs...)
