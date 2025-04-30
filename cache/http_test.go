@@ -86,3 +86,82 @@ func TestHTTPPool(t *testing.T) {
 		})
 	}
 }
+
+func createGroup(name string) *gocachex.Group {
+	return gocachex.NewGroup(name, 2<<10, gocachex.GetterFunc(
+		func(key string) ([]byte, error) {
+			log.Println("[SlowDB] search key", key)
+			if v, ok := db[key]; ok {
+				return []byte(v), nil
+			}
+			return nil, fmt.Errorf("%s not exist", key)
+		}))
+}
+
+func TestMultiNodeCache(t *testing.T) {
+	// 初始化节点
+	const numNodes = 3
+	var servers []*httptest.Server
+	var addrs []string
+
+	// 创建每个节点的 server，并预先记录地址
+	for i := 0; i < numNodes; i++ {
+		server := httptest.NewServer(nil) // 占位，稍后设置 handler
+		servers = append(servers, server)
+		addrs = append(addrs, server.URL)
+	}
+
+	// 初始化每个节点的 group 和 handler
+	for i, server := range servers {
+		group := createGroup(fmt.Sprint(i))
+
+		peers := gocachex.NewHTTPPool(server.URL)
+		peers.Set(addrs...)
+		group.RegisterPeers(peers)
+
+		server.Config.Handler = peers
+	}
+
+	// 清理所有 server
+	defer func() {
+		for _, server := range servers {
+			server.Close()
+		}
+	}()
+
+	// 测试用例
+	testCases := []struct {
+		key      string
+		expected string
+	}{
+		{"Tom", "630"},
+		{"Jack", "589"},
+		{"Sam", "567"},
+	}
+
+	// 对每个节点发起请求
+	for i, server := range servers {
+		t.Run(fmt.Sprintf("node-%d", i+1), func(t *testing.T) {
+			for _, tc := range testCases {
+				t.Run(tc.key, func(t *testing.T) {
+					url := fmt.Sprintf("%s/_gocacheX/%s/%s", server.URL, fmt.Sprint(i), tc.key)
+					resp, err := http.Get(url)
+					if err != nil {
+						t.Fatalf("请求失败: %v", err)
+					}
+					defer resp.Body.Close()
+
+					bytes, err := io.ReadAll(resp.Body)
+					if err != nil {
+						t.Fatalf("读取响应失败: %v", err)
+					}
+
+					got := strings.TrimSpace(string(bytes))
+					if got != tc.expected {
+						t.Errorf("节点 %d 期望值 %q，得到 %q", i+1, tc.expected, got)
+					}
+				})
+			}
+		})
+	}
+}
