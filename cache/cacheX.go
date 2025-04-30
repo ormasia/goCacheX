@@ -10,6 +10,7 @@ package gocachex
 
 import (
 	"fmt"
+	"goCacheX/singleflight"
 	"log"
 	"sync"
 )
@@ -20,6 +21,9 @@ type Group struct {
 	name      string // 缓存命名空间的名称
 	getter    Getter // 缓存未命中时获取源数据的回调函数
 	mainCache cache  // 并发安全的主缓存，存储实际的缓存数据
+
+	peers  PeerPicker
+	loader *singleflight.Group
 }
 
 // Getter 定义了当缓存未命中时获取源数据的接口
@@ -54,6 +58,7 @@ func NewGroup(name string, cacheBytes int64, getter Getter) *Group {
 		name:      name,
 		getter:    getter,
 		mainCache: cache{cacheBytes: cacheBytes},
+		loader:    &singleflight.Group{},
 	}
 	groups[name] = g
 	return g
@@ -64,9 +69,6 @@ func GetGroup(name string) *Group {
 	mu.RLock()
 	defer mu.RUnlock()
 	g := groups[name]
-	if g == nil {
-		return nil
-	}
 	return g
 }
 
@@ -84,10 +86,55 @@ func (g *Group) Get(key string) (ByteView, error) {
 	return g.load(key)
 }
 
-// load 加载键对应的值，可以从本地或远程获取
-func (g *Group) load(key string) (ByteView, error) {
-	return g.getLocally(key)
+func (g *Group) RegisterPeers(peers PeerPicker) {
+	if g.peers != nil {
+		panic("RegisterPeerPicker called more than once")
+	}
+	g.peers = peers
 }
+
+// load 加载键对应的值，可以从本地或远程获取
+func (g *Group) load(key string) (value ByteView, err error) { //返回值变量在函数开始时就已声明和初始化可以直接在函数体内使用这些变量不需要显式 return 具体的值，可以直接 return适合需要多次修改返回值的情况
+
+	view, err := g.loader.Do(key, func() (any, error) {
+		if g.peers != nil {
+			if peer, ok := g.peers.PickPeer(key); ok {
+				if value, err = g.getFromPeer(peer, key); err == nil {
+					return value, nil
+				}
+				log.Println("[GeeCache] Failed to get from peer", err)
+			}
+		}
+		return g.getLocally(key)
+	})
+
+	if err == nil {
+		return view.(ByteView), nil
+	}
+	return ByteView{}, err
+}
+
+// func (g *Group) load(key string) (value ByteView, err error) {
+// 	// each key is only fetched once (either locally or remotely)
+// 	// regardless of the number of concurrent callers.
+// 	view, err := g.loader.Do(key, func() (any, error) {
+// 		if g.peers != nil {
+// 			if peer, ok := g.peers.PickPeer(key); ok {
+// 				if value, err = g.getFromPeer(peer, key); err == nil {
+// 					return value, nil
+// 				}
+// 				log.Println("[GeeCache] Failed to get from peer", err)
+// 			}
+// 		}
+
+// 		return g.getLocally(key)
+// 	})
+
+// 	if err == nil {
+// 		return view.(ByteView), nil
+// 	}
+// 	return
+// }
 
 // getLocally 从本地数据源获取原始数据，转换为ByteView并添加到缓存
 func (g *Group) getLocally(key string) (ByteView, error) {
@@ -110,4 +157,12 @@ func (g *Group) getLocally(key string) (ByteView, error) {
 // populateCache 将键值对添加到缓存
 func (g *Group) populateCache(key string, value ByteView) {
 	g.mainCache.add(key, value)
+}
+
+func (g *Group) getFromPeer(peer PeerGetter, key string) (ByteView, error) {
+	bytes, err := peer.Get(g.name, key)
+	if err != nil {
+		return ByteView{}, err
+	}
+	return ByteView{b: bytes}, nil
 }

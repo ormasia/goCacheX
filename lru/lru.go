@@ -23,12 +23,11 @@ import "container/list" // 导入Go标准库中的双向链表包
 
 // Cache 是一个LRU（最近最少使用）缓存结构。注意：它不是并发安全的。
 type Cache struct {
-	maxBytes int64                    // 缓存的最大内存占用（字节）
-	nbytes   int64                    // 当前缓存已使用的内存（字节）
-	ll       *list.List               // 双向链表，用于维护缓存项的访问顺序
-	cache    map[string]*list.Element // 字符串到链表节点的映射，用于O(1)时间复杂度查找缓存项
-	// 可选的回调函数，当缓存项被清除时调用
-	OnEvicted func(key string, value Value)
+	maxBytes  int64                         // 缓存的最大内存占用（字节）
+	nbytes    int64                         // 当前缓存已使用的内存（字节）
+	ll        *list.List                    // 双向链表，用于维护缓存项的访问顺序
+	cache     map[string]*list.Element      // 字符串到链表节点的映射，用于O(1)时间复杂度查找缓存项
+	OnEvicted func(key string, value Value) // 可选的回调函数，当缓存项被清除时调用
 }
 
 // entry 是存储在双向链表中的缓存项

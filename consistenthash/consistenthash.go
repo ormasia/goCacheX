@@ -9,7 +9,7 @@ import (
 )
 
 // Hash 定义哈希函数类型
-type Hash func(data []byte) uint32
+type Hash func(data []byte) uint32 //原因是crc32.ChecksumIEEE是这个类型
 
 // Map 是一致性哈希算法的主要数据结构
 type Map struct {

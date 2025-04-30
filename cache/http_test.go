@@ -60,7 +60,7 @@ func TestHTTPPool(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			log.Printf("%v", server.URL)
-			url := fmt.Sprintf("%s/_geecache/scores/%s", server.URL, tt.key)
+			url := fmt.Sprintf("%s/_gocacheX/scores/%s", server.URL, tt.key)
 			resp, err := http.Get(url)
 			if err != nil {
 				t.Fatalf("请求失败: %v", err)
