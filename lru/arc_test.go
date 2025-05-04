@@ -31,6 +31,7 @@ package lru
 import (
 	"fmt"
 	"testing"
+	"time"
 )
 
 func TestARCBasic(t *testing.T) {
@@ -170,5 +171,160 @@ func BenchmarkARCGet(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		arc.Get(fmt.Sprintf("key%d", i%1000))
+	}
+}
+
+func TestARCTTL(t *testing.T) {
+	arc := NewARC(3)
+	defer arc.Close()
+
+	// 测试设置带 TTL 的缓存
+	arc.PutWithTTL("key1", "value1", 100*time.Millisecond)
+	arc.PutWithTTL("key2", "value2", 200*time.Millisecond)
+	arc.Put("key3", "value3") // 永久缓存
+
+	// 立即获取，应该都能获取到
+	if v, ok := arc.Get("key1"); !ok || v != "value1" {
+		t.Errorf("Get key1 failed, got %v, want value1", v)
+	}
+	if v, ok := arc.Get("key2"); !ok || v != "value2" {
+		t.Errorf("Get key2 failed, got %v, want value2", v)
+	}
+	if v, ok := arc.Get("key3"); !ok || v != "value3" {
+		t.Errorf("Get key3 failed, got %v, want value3", v)
+	}
+
+	// 等待 key1 过期
+	time.Sleep(150 * time.Millisecond)
+	if _, ok := arc.Get("key1"); ok {
+		t.Error("key1 should be expired")
+	}
+
+	// 等待 key2 过期
+	time.Sleep(100 * time.Millisecond)
+	if _, ok := arc.Get("key2"); ok {
+		t.Error("key2 should be expired")
+	}
+
+	// key3 应该仍然存在
+	if v, ok := arc.Get("key3"); !ok || v != "value3" {
+		t.Errorf("Get key3 failed, got %v, want value3", v)
+	}
+}
+
+func TestARCTTLUpdate(t *testing.T) {
+	arc := NewARC(3)
+	defer arc.Close()
+
+	// 设置初始 TTL
+	arc.PutWithTTL("key1", "value1", 100*time.Millisecond)
+
+	// 更新 TTL
+	arc.PutWithTTL("key1", "value1", 200*time.Millisecond)
+
+	// 等待第一次 TTL 时间
+	time.Sleep(150 * time.Millisecond)
+
+	// 应该仍然存在
+	if v, ok := arc.Get("key1"); !ok || v != "value1" {
+		t.Errorf("Get key1 failed, got %v, want value1", v)
+	}
+
+	// 等待第二次 TTL 时间
+	time.Sleep(100 * time.Millisecond)
+
+	// 应该过期
+	if _, ok := arc.Get("key1"); ok {
+		t.Error("key1 should be expired")
+	}
+}
+
+func TestARCTTLZero(t *testing.T) {
+	arc := NewARC(3)
+	defer arc.Close()
+
+	// 设置 TTL 为 0
+	arc.PutWithTTL("key1", "value1", 0)
+
+	// 等待一段时间
+	time.Sleep(100 * time.Millisecond)
+
+	// 应该仍然存在
+	if v, ok := arc.Get("key1"); !ok || v != "value1" {
+		t.Errorf("Get key1 failed, got %v, want value1", v)
+	}
+}
+
+func TestARCTTLNegative(t *testing.T) {
+	arc := NewARC(3)
+	defer arc.Close()
+
+	// 设置负的 TTL
+	arc.PutWithTTL("key1", "value1", -100*time.Millisecond)
+
+	// 应该立即过期
+	if _, ok := arc.Get("key1"); ok {
+		t.Error("key1 should be expired immediately")
+	}
+}
+
+func TestARCTTLConcurrent(t *testing.T) {
+	arc := NewARC(100)
+	defer arc.Close()
+
+	// 并发设置带 TTL 的缓存
+	done := make(chan bool)
+	for i := 0; i < 10; i++ {
+		go func(id int) {
+			for j := 0; j < 10; j++ {
+				key := fmt.Sprintf("key%d", id*10+j)
+				arc.PutWithTTL(key, fmt.Sprintf("value%d", id*10+j), 100*time.Millisecond)
+			}
+			done <- true
+		}(i)
+	}
+
+	// 等待所有 goroutine 完成
+	for i := 0; i < 10; i++ {
+		<-done
+	}
+
+	// 等待清理协程执行
+	time.Sleep(2 * time.Second)
+
+	// 检查是否都已过期
+	for i := 0; i < 100; i++ {
+		key := fmt.Sprintf("key%d", i)
+		if _, ok := arc.Get(key); ok {
+			t.Errorf("key %s should be expired", key)
+		}
+	}
+}
+
+func TestARCTTLWithReplace(t *testing.T) {
+	arc := NewARC(2)
+	defer arc.Close()
+
+	// 设置两个带 TTL 的缓存
+	arc.PutWithTTL("key1", "value1", 100*time.Millisecond)
+	arc.PutWithTTL("key2", "value2", 200*time.Millisecond)
+
+	// 添加第三个键，触发替换
+	arc.PutWithTTL("key3", "value3", 300*time.Millisecond)
+
+	// 等待 key1 过期
+	time.Sleep(150 * time.Millisecond)
+
+	// 检查 key1 是否已过期
+	if _, ok := arc.Get("key1"); ok {
+		t.Error("key1 should be expired")
+	}
+
+	// 检查 key2 和 key3 是否仍然存在
+	if v, ok := arc.Get("key2"); !ok || v != "value2" {
+		t.Errorf("Get key2 failed, got %v, want value2", v)
+	}
+	if v, ok := arc.Get("key3"); !ok || v != "value3" {
+		t.Errorf("Get key3 failed, got %v, want value3", v)
 	}
 }
